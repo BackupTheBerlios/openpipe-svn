@@ -1,0 +1,30 @@
+#banner {
+   background: #fff;
+   color: #036;
+}
+
+#poweredBy img {
+   border-top-width: 0;
+   border-right-width: 0;
+   border-bottom-width: 0;
+   border-left-width: 0;
+}
+
+#leftColumn {
+   width: 177px;
+}
+
+div#banner {
+   height: 40px;
+}
+
+#bannerRight img {
+   padding-top: 4px;
+   padding-right: 4px;
+   padding-bottom: 4px;
+}
+
+#bannerLeft img {
+   padding-top: 4px;
+   padding-bottom: 4px;
+}

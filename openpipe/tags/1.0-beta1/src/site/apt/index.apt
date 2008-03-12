@@ -1,0 +1,99 @@
+ -----
+ OpenPipe
+ -----
+ Espen Amble Kolstad
+ -----
+
+OpenPipe
+~~~~~~~~
+  OpenPipe is an open source scalable platform for manipulating a stream of documents. Pipelines are created from
+  building bricks doing atomic operations on documents, like language detection, field manipulation, POS tagging,
+  entity extraction or submitting the document to a search engine. OpenPipe was originally designed for indexing with
+  the {{{http://lucene.apache.org/solr/}Solr}} full-text search engine, but could easily be adapted to any search engine
+  or any other use case where documents need to be processed in various ways.
+
+
+  We did not invent the notion of a document pipeline. Several linguistic packages, like {{{http://gate.ac.uk/}GATE}} or 
+  {{{http://www.alias-i.com/lingpipe/}LingPipe}}, use the same concept. The 
+  {{{http://incubator.apache.org/uima/}Apache UIMA}} framework and commercial products like 
+  {{{http://fast.no/}Fast ESP}} also use document pipelines. Before we started to develop OpenPipe, we evaluated several 
+  of these and other products for using them as a basis for an indexing pipeline for Solr. All of them were found to 
+  have one or more of the following shortcomings:
+  
+    * A too restrictive license
+    
+    * Too targeted against specific use
+    
+    * Unnecessarily complex
+
+
+  There are already a lot of analyzers, field copying functionality etc in Solr. So why seperate the document
+  preprocessing from the core Solr product? There are several good answers to this functionality:
+  
+    [[1]] Scalability: Document processing could be CPU intensive (automatic classification, entity extraction, format 
+    conversion) and/or memory intensive (dictionary based lemmatization in multiple languages, dictionary based entity 
+    extraction). By separating, the document processing could be scaled independently of the indexing by running 
+    multiple document processing nodes feeding processed content into the same index.
+    
+    [[1]] Maintainability: If all kinds of functionality are to be put into Solr itself, the product would be less easy to 
+    maintain, and further development would be slowed down. Solr is also likely to get less stable. Solr should stay 
+    focused on core functionality.
+    
+    [[1]] Adaptability: Creating a pipeline step for specific needs is very simple. All you need to care about is a 
+    document object, and you don't need to know anything about Solr internals and don't need to worry about messing up 
+    the critical search application.
+    
+    [[1]] Flexibility: The document processing will not be tied to a specific index. Different content ending up in the 
+    same index could be processed through various pipelines, and a single pipeline could submit content to various 
+    indexes.
+
+  Also, OpenPipe could be integrated with products other than Solr.
+
+
+* Terminology
+~~~~~~~~~~~~~
+** Pipeline step
+~~~~~~~~~~~~~~~~
+  A pipeline step is an implementation of some operations on a document, for instance lemmatization. A document is 
+  received as input. More info on writing a pipeline step can be found on the
+  {{{http://openfacts2.berlios.de/wikien/index.php/BerliosProject:OpenPipe/PipelineStepGettingStarted}wiki}}
+
+** Pipeline
+~~~~~~~~~~~
+  A pipeline is an ordered set of pipeline steps, together doing what is necessary to get a document from its raw form 
+  to something ready to be put into the index.
+
+** Subpipeline
+~~~~~~~~~~~~~~
+  A subpipeline is just a pipeline being called from another pipeline. There might be two reasons for using subpipelines. 
+  If several pipelines have a lot of steps in common, the setup will be easier to maintain if a common subpipeline is 
+  used. Another reason for using subpipelines is that, based on some attributes of the document, different subpipelines 
+  should be called.
+
+** Producer
+~~~~~~~~~~~
+  A producer is a module responsible for getting content from somewhere and inject this content as documents into a 
+  pipeline. The following producers are currently shipped with OpenPipe:
+
+    * jdbc: Read content from a database. More info can be found on the
+    {{{http://openfacts2.berlios.de/wikien/index.php/BerliosProject:OpenPipe_-_SimpleJdbcDocumentProducer}wiki}}
+    
+    * solr: Receive HTTP Post UpdateXMLMessages in the same manner as Solr
+    
+    * filesystem crawl: Crawl a file system and index all recognizable content, one document per file
+
+* Solr integration
+~~~~~~~~~~~~~~~~~~
+  OpenPipe ships with a pipeline step for posting content to Solr.
+
+  Some document processing functionality requires that the content of fields are analyzed up front. Therefore, we have 
+  made it possible to use Solr's internal analyzers within OpenPipe. Also, the output from some steps need to pass 
+  information like word positions to Solr. If for instance, you are doing lemmatization by expansion, you want all 
+  variations of a token to have the same word position in the index. UpdateXMLMessages does not have support for such 
+  inline information. We have therefore made a binary format for transmitting documents from OpenPipe to Solr.
+
+* License
+~~~~~~~~~
+  Copyright 2007  T-Rank AS
+
+  OpenPipe is licensed under the {{{http://www.apache.org/licenses/LICENSE-2.0}Apache License, Version 2.0}}.

@@ -1,0 +1,219 @@
+ -----
+ OpenPipe - Getting started
+ -----
+ Espen Amble Kolstad
+ Frode Johannesen
+ -----
+
+Getting started
+~~~~~~~~~~~~~~~
+ 
+  This tutorial demonstrates how to crawl your local filesystem, making it searchable with Solr.
+
+  If you are not familiar with Solr, we recommend their {{{http://lucene.apache.org/solr/tutorial.html}tutorial}}.
+  However, this tutorial does not require any prior knowledge of Solr.
+  
+
+* Requirements
+~~~~~~~~~~~~~~
+
+  [[1]] {{{http://java.sun.com/javase/downloads/index.jsp}Java 1.6}} or higher.
+
+  [[2]] {{{http://subversion.tigris.org/}Subversion}}
+
+  [[3]] {{{http://maven.apache.org/}Maven 2}}
+
+  [[4]] {{{http://www.apache.org/dyn/closer.cgi/lucene/solr/}Solr version 1.2}} or higher.
+      
+
+* Setting up Solr
+~~~~~~~~~~~~~~~~~
+
+  Unpack a binary distribution of Solr:
+
++----------------------------------+
+  tar xfz apache-solr-1.2.0.tgz -C ~
+  mv ~/apache-solr-1.2.0 ~/solr
++----------------------------------+
+
+  We'll have to make some changes to the schema as well as adding OpenPipe <<<solr-tokenizer.jar>>> to the
+   <<<solr-webapp>>>.
+  
+  From this point forward we'll assume you installed Solr in <<<~/solr>>>. This gives schema file as 
+  <<<~/solr/example/solr/conf/schema.xml>>> and the Solr webapp as <<<~/solr/example/webapps/solr.war>>>.
+  
+** Setting up libraries
+~~~~~~~~~~~~~~~~~~~~~~~
+
+  In order to add libraries to <<<solr-webapp>>> we need to unjar <<<~/solr/example/webapps/solr.war>>>:
+  
++----------------------------------+
+  cd ~/solr/example/webapps/
+  mkdir solr
+  cd solr
+  jar xf ../solr.war
++----------------------------------+
+  
+  Then download {{{ftp://ftp.berlios.de/pub/openpipe/solr-tokenizer.jar}solr-tokenizer.jar}} and save it to
+  <<<~/solr/example/webapps/solr/WEB-INF/lib>>>.\
+  <<Note>>: In order to index pre-tokenized documents with Solr we have submitted an issue with Solr:
+  {{{http://issues.apache.org/jira/browse/SOLR-398}SOLR-398}}.
+  Until this has been accepted into Solr, you'll have to replace
+  <<<~/solr/example/webapps/solr/WEB-INF/lib/apache-solr-1.2.0.jar>>> with this patched version 
+  {{{ftp://ftp.berlios.de/pub/openpipe/solr-1.2.0-SOLR-398.jar}solr-1.2.0-SOLR-398.jar}}.
+  
+** Setting up schema.xml
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+  We'll need a different schema, since we're indexing something quite different than the example docs.
+  
+  Replace <<<~/solr/example/solr/conf/schema.xml>>> with {{{schema.xml}this}}.
+  
+*** FieldType
+~~~~~~~~~~~~~
+
+  We need set up a field type that allows us to tokenize fields prior to submitting to Solr. The current implementation 
+  uses a binary format encoded as {{{http://en.wikipedia.org/wiki/Base64}base64}} in the xml to Solr. 
+  For more details on the binary format, see {{{../apidocs/no/trank/openpipe/solr/schema/Base64Type.html}Base64Type}}.
+  
++--------------------------------------------------------------------------------------------------------+
+  <fieldType name="text_op" class="no.trank.openpipe.solr.schema.Base64Type" positionIncrementGap="100">
+    <analyzer type="index">
+       <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1"
+              catenateWords="0" catenateNumbers="0" catenateAll="0"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+    </analyzer>
+  </fieldType>
++--------------------------------------------------------------------------------------------------------+
+
+  Two analyzers have been configured. The <index> type analyzer is used when highlighting a search. The <query>
+  type analyzer, which should be compatible with the OpenPipe config showed later, is used for the query.\
+  Compared to the standard <<<schema.xml>>>:
+
++--------------------------------------------------------------------------------------------------------+
+  <fieldType name="text" class="solr.TextField" positionIncrementGap="100">
+    <analyzer type="index">
+      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt"/>
+      <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1"
+              catenateWords="1" catenateNumbers="1" catenateAll="0"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.EnglishPorterFilterFactory" protected="protwords.txt"/>
+      <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+      <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt"/>
+      <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1"
+              catenateWords="0" catenateNumbers="0" catenateAll="0"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.EnglishPorterFilterFactory" protected="protwords.txt"/>
+      <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+    </analyzer>
+  </fieldType>
++--------------------------------------------------------------------------------------------------------+
+
+  We have removed the <<<SynonymFilter>>>, <<<StopFilter>>> and <<<EnglishPorterFilter>>> (for simplicity).
+
+*** Fields
+~~~~~~~~~~
+
+  The fields we set up are as follows:
+
++--------------------------------------------------------------------------------+
+  <fields>
+    <field name="id" type="string" indexed="true" stored="true" required="true"/>
+    <field name="title" type="text_op" indexed="true" stored="true"/>
+    <field name="url" type="string" indexed="false" stored="true"/>
+    <field name="content" type="text_op" indexed="true" stored="true"/>
+    <field name="lastModified" type="long" indexed="true" stored="true"/>
+  </fields>
++--------------------------------------------------------------------------------+
+
+  For <<<id>>> we'll use the <path> of the document. <<<content>>> is the parsed content of the document.
+  <<<url>>> is a browser friendly version of the <path> of the document.
+
+** Starting Solr
+~~~~~~~~~~~~~~~~
+
+  Before we set up OpenPipe and start feeding documents, Solr needs to be to be up and running:
+
++----------------------------------+
+  cd ~/solr/example
+  java -jar start.jar
++----------------------------------+
+
+
+** Setting up OpenPipe
+~~~~~~~~~~~~~~~~~~~~~~
+
+  There are currently no binary releases of OpenPipe, 
+  
+  Follow these steps to acquire the latest version and build the modules:
+
++----------------------------------+
+  svn checkout http://svn.berlios.de/svnroot/repos/openpipe/openpipe/trunk openpipe
+  cd openpipe
+  mvn install
++----------------------------------+
+
+
+** The pipeline
+~~~~~~~~~~~~~~~
+
+  Our example application is configured through Spring in <<openpipe/tutorial-intranet/src/main/resources>>.
+  It's put together roughly like this:
+
++----------------------------------+
++- pipelineApplicationBean [no.trank.openpipe.api.PipelineRunner]
+   +- fileDocumentReader [no.trank.openpipe.reader.FileDocumentReader]
+   +- pipeline [no.trank.openpipe.api.Pipeline]
+      +- parseStep [no.trank.openpipe.parse.step.DocumentParser]
+      +- copyField [no.trank.openpipe.step.CopyField]
+      +- regexFieldPrepend [no.trank.openpipe.step.RegexField]
+      +- regexFieldEncode [no.trank.openpipe.step.RegexField]
+      +- solrAnalyzer [no.trank.openpipe.solr.step.SolrAnalyzerStep]
+      +- solrDocumentProcessor [no.trank.openpipe.solr.step.SolrDocumentProcessor]
++----------------------------------+
+
+  <pipelineApplicationBean> requests documents from <fileDocumentReader> and feeds them to the <pipeline>.
+  <fileDocumentReader> crawls a directory and looks for certain file extensions. The steps in the <pipeline>:
+
+*-----------------------+---------------------------------------------------------------------------------------------+
+| parseStep             | This step examines the file extension and parses the content accordingly.
+*-----------------------+---------------------------------------------------------------------------------------------+
+| copyField             | Copies the content of the field <pathName> to the field <id>.
+*-----------------------+---------------------------------------------------------------------------------------------+
+| regexFieldPrepend     | Copies the the content of the field <id> to the field <url> and prepends it with <file://>.
+*-----------------------+---------------------------------------------------------------------------------------------+
+| regexFieldEncode      | Replaces <%> occurences in the field <url> with <%25>.
+*-----------------------+---------------------------------------------------------------------------------------------+
+| solrAnalyzer          | Performs Solr tokenizing on the fields <content> and <title>.
+*-----------------------+---------------------------------------------------------------------------------------------+
+| solrDocumentProcessor | Posts the document to {{http://localhost:8983/solr/update}}.
+*-----------------------+---------------------------------------------------------------------------------------------+
+
+
+** Indexing
+~~~~~~~~~~~
+
+  We now have a live Solr index and OpenPipe available. Pick a directory on your hard drive that contains
+  a nice batch of documents and run these steps:
+
++----------------------------------+
+  cd tutorial-intranet/target
+  java -jar tutorial-intranet-1.0-SNAPSHOT-jar-with-dependencies.jar <path to your files>
++----------------------------------+
+
+
+* Searching
+~~~~~~~~~~~
+
+  Go to {{http://localhost:8983/solr/admin/}}. Type <<<id:[* TO *]>>> in the <Query String> field. Hit the
+  <Search> button. This search result represents all the indexed documents. Only the first 10 are displayed.
